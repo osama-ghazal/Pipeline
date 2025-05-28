@@ -1,5 +1,12 @@
+default_platform(:android)
+
+# Define project root and version file path
 PROJECT_ROOT = File.expand_path("..", __dir__)
 VERSION_FILE = File.join(PROJECT_ROOT, "version.properties")
+
+# Parses version.properties at project root
+# Skips blank lines or comments
+# Returns a hash with :name and :code
 
 def parse_version_props
   props = {}
@@ -9,11 +16,13 @@ def parse_version_props
     props[key] = value
   end
   name = props["VERSION_NAME"]
-  raise "VERSION_NAME not found in #{VERSION_FILE}" if name.nil?
+  raise "VERSION_NAME not found in #{VERSION_FILE}" if name.nil? || name.empty?
   code_str = props["VERSION_CODE"]
-  raise "VERSION_CODE not found in #{VERSION_FILE}" if code_str.nil?
+  raise "VERSION_CODE not found in #{VERSION_FILE}" if code_str.nil? || code_str.empty?
   { name: name, code: code_str.to_i }
 end
+
+# Writes new version values to version.properties
 
 def write_version_props(new_name, new_code)
   File.open(VERSION_FILE, "w") do |f|
@@ -22,6 +31,8 @@ def write_version_props(new_name, new_code)
   end
 end
 
+# Commits version.properties using Git from project root
+
 def run_git_commit(message)
   Dir.chdir(PROJECT_ROOT) do
     sh("git add version.properties")
@@ -29,7 +40,36 @@ def run_git_commit(message)
   end
 end
 
+# Generic bump helper: :patch, :minor, :major
+# Updates version.properties and commits
+
+def bump_version(type)
+  version = parse_version_props
+  major, minor, patch = version[:name].split('.').map(&:to_i)
+  case type
+  when :patch
+    patch += 1
+  when :minor
+    minor += 1
+    patch = 0
+  when :major
+    major += 1
+    minor = 0
+    patch = 0
+  else
+    raise "Unknown bump type: #{type}"
+  end
+  new_name = [major, minor, patch].join('.')
+  new_code = major * 10_000 + minor * 100 + patch
+  write_version_props(new_name, new_code)
+  run_git_commit("chore: bump #{type} version to #{new_name}")
+end
+
 platform :android do
+  ########################################
+  # Semantic version bump lanes
+  ########################################
+
   desc "Bump patch version (x.y.Z → x.y.Z+1)"
   lane :bump_patch do
     bump_version(:patch)
@@ -44,6 +84,10 @@ platform :android do
   lane :bump_major do
     bump_version(:major)
   end
+
+  ########################################
+  # Existing lanes
+  ########################################
 
   desc "Runs all the tests"
   lane :test do
@@ -61,27 +105,4 @@ platform :android do
     gradle(task: "clean assembleRelease")
     upload_to_play_store
   end
-end
-
-# Helper to bump version based on type
-
-def bump_version(type)
-  version = parse_version_props
-  parts = version[:name].split(".").map(&:to_i)
-  major, minor, patch = parts
-  case type
-  when :patch
-    patch += 1
-  when :minor
-    minor += 1
-    patch = 0
-  when :major
-    major += 1
-    minor = 0
-    patch = 0
-  end
-  new_name = [major, minor, patch].join(".")
-  new_code = major * 10000 + minor * 100 + patch
-  write_version_props(new_name, new_code)
-  run_git_commit("chore: bump #{type} version to #{new_name}")
 end
