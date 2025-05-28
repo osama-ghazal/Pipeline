@@ -1,0 +1,85 @@
+# fastlane/Fastfile
+# Helpers for semantic versioning based on version.properties
+
+def parse_version_props
+  props = File.read("version.properties").split("\n").map { |l| l.split("=") }.to_h
+  { name: props["VERSION_NAME"], code: props["VERSION_CODE"].to_i }
+end
+
+def write_version_props(new_name, new_code)
+  File.open("version.properties", "w") do |f|
+    f.puts("VERSION_NAME=#{new_name}")
+    f.puts("VERSION_CODE=#{new_code}")
+  end
+end
+
+def next_version_code(major, minor, patch)
+  # versionCode = MAJOR*10000 + MINOR*100 + PATCH
+  major * 10_000 + minor * 100 + patch
+end
+
+def bump_version(part)
+  version = parse_version_props
+  major, minor, patch = version[:name].split(".").map(&:to_i)
+  case part
+  when :major
+    major += 1; minor = 0; patch = 0
+  when :minor
+    minor += 1; patch = 0
+  when :patch
+    patch += 1
+  end
+  new_name = [major, minor, patch].join(".")
+  new_code = next_version_code(major, minor, patch)
+  write_version_props(new_name, new_code)
+  git_add(path: "version.properties")
+  git_commit(message: "chore: bump #{part} version to #{new_name}")
+end
+
+def bump_patch
+  bump_version(:patch)
+end
+
+def bump_minor
+  bump_version(:minor)
+end
+
+def bump_major
+  bump_version(:major)
+end
+
+default_platform(:android)
+
+platform :android do
+  desc "Bump patch version"
+  lane :bump_patch do
+    bump_patch
+  end
+
+  desc "Bump minor version"
+  lane :bump_minor do
+    bump_minor
+  end
+
+  desc "Bump major version"
+  lane :bump_major do
+    bump_major
+  end
+
+  desc "Runs all the tests"
+  lane :test do
+    gradle(task: "test")
+  end
+
+  desc "Submit a new Beta Build to Crashlytics Beta"
+  lane :beta do
+    gradle(task: "clean assembleRelease")
+    crashlytics
+  end
+
+  desc "Deploy a new version to the Google Play"
+  lane :deploy do
+    gradle(task: "clean assembleRelease")
+    upload_to_play_store
+  end
+end
