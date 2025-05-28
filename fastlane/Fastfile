@@ -1,70 +1,82 @@
-# fastlane/Fastfile
-# Helpers for semantic versioning based on version.properties
+default_platform(:android)
+
+# Define project root and version file path\ nPROJECT_ROOT = File.expand_path("..", __dir__)
+VERSION_FILE = File.join(PROJECT_ROOT, "version.properties")
+
+# Helper: parse version.properties, skip blank/comments
 
 def parse_version_props
-  props = File.read("version.properties").split("\n").map { |l| l.split("=") }.to_h
+  props = {}
+  File.read(VERSION_FILE).each_line do |line|
+    next if line.strip.empty? || line.strip.start_with?("#")
+    key, value = line.strip.split("=", 2)
+    props[key] = value
+  end
   { name: props["VERSION_NAME"], code: props["VERSION_CODE"].to_i }
 end
 
+# Helper: write new version back
+
 def write_version_props(new_name, new_code)
-  File.open("version.properties", "w") do |f|
+  File.open(VERSION_FILE, "w") do |f|
     f.puts("VERSION_NAME=#{new_name}")
     f.puts("VERSION_CODE=#{new_code}")
   end
 end
 
-def next_version_code(major, minor, patch)
-  # versionCode = MAJOR*10000 + MINOR*100 + PATCH
-  major * 10_000 + minor * 100 + patch
-end
-
-def bump_version(part)
-  version = parse_version_props
-  major, minor, patch = version[:name].split(".").map(&:to_i)
-  case part
-  when :major
-    major += 1; minor = 0; patch = 0
-  when :minor
-    minor += 1; patch = 0
-  when :patch
-    patch += 1
-  end
-  new_name = [major, minor, patch].join(".")
-  new_code = next_version_code(major, minor, patch)
-  write_version_props(new_name, new_code)
-  git_add(path: "version.properties")
-  git_commit(message: "chore: bump #{part} version to #{new_name}")
-end
-
-def bump_patch
-  bump_version(:patch)
-end
-
-def bump_minor
-  bump_version(:minor)
-end
-
-def bump_major
-  bump_version(:major)
-end
-
-default_platform(:android)
-
 platform :android do
-  desc "Bump patch version"
+  ########################################
+  # Semantic version bump lanes
+  ########################################
+
+  desc "Bump patch version (x.y.Z → x.y.Z+1)"
   lane :bump_patch do
-    bump_patch
+    v = parse_version_props
+    major, minor, patch = v[:name].split(".").map(&:to_i)
+    patch += 1
+    new_name = [major, minor, patch].join(".")
+    new_code = major * 10_000 + minor * 100 + patch
+    write_version_props(new_name, new_code)
+
+    Dir.chdir(PROJECT_ROOT) do
+      sh("git add version.properties")
+      sh("git commit -m 'chore: bump patch version to #{new_name}'")
+    end
   end
 
-  desc "Bump minor version"
+  desc "Bump minor version (x.y.Z → x.(y+1).0)"
   lane :bump_minor do
-    bump_minor
+    v = parse_version_props
+    major, minor, _ = v[:name].split(".").map(&:to_i)
+    minor += 1
+    new_name = [major, minor, 0].join(".")
+    new_code = major * 10_000 + minor * 100
+    write_version_props(new_name, new_code)
+
+    Dir.chdir(PROJECT_ROOT) do
+      sh("git add version.properties")
+      sh("git commit -m 'chore: bump minor version to #{new_name}'")
+    end
   end
 
-  desc "Bump major version"
+  desc "Bump major version (x.Y.Z → (x+1).0.0)"
   lane :bump_major do
-    bump_major
+    v = parse_version_props
+    major, _, _ = v[:name].split(".").map(&:to_i)
+    major += 1
+    new_name = [major, 0, 0].join(".")
+    new_code = major * 10_000
+    write_version_props(new_name, new_code)
+
+    Dir.chdir(PROJECT_ROOT) do
+      sh("git add version.properties")
+      sh("git commit -m 'chore: bump major version to #{new_name}'")
+    end
   end
+
+  ########################################
+  # Other lanes: test, beta, deploy
+  ########################################
 
   desc "Runs all the tests"
   lane :test do
