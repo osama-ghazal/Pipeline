@@ -1,9 +1,5 @@
-default_platform(:android)
-
-# Define project root and version file path\ nPROJECT_ROOT = File.expand_path("..", __dir__)
+PROJECT_ROOT = File.expand_path("..", __dir__)
 VERSION_FILE = File.join(PROJECT_ROOT, "version.properties")
-
-# Helper: parse version.properties, skip blank/comments
 
 def parse_version_props
   props = {}
@@ -15,8 +11,6 @@ def parse_version_props
   { name: props["VERSION_NAME"], code: props["VERSION_CODE"].to_i }
 end
 
-# Helper: write new version back
-
 def write_version_props(new_name, new_code)
   File.open(VERSION_FILE, "w") do |f|
     f.puts("VERSION_NAME=#{new_name}")
@@ -24,59 +18,59 @@ def write_version_props(new_name, new_code)
   end
 end
 
-platform :android do
-  ########################################
-  # Semantic version bump lanes
-  ########################################
+def load_gradle_env
+  # If needed, implement environment loading (e.g., JAVA_HOME)
+end
 
-  desc "Bump patch version (x.y.Z → x.y.Z+1)"
-  lane :bump_patch do
-    v = parse_version_props
-    major, minor, patch = v[:name].split(".").map(&:to_i)
+def default_fastlane_setup
+  default_platform(:android)
+end
+
+def run_git_commit(message)
+  Dir.chdir(PROJECT_ROOT) do
+    sh("git add version.properties")
+    sh("git commit -m '#{message}'")
+  end
+end
+
+def bump_version(type)
+  v = parse_version_props
+  major, minor, patch = v[:name].split(".{}").map(&:to_i) rescue v[:name].split(".").map(&:to_i)
+  case type
+  when :patch
     patch += 1
-    new_name = [major, minor, patch].join(".")
-    new_code = major * 10_000 + minor * 100 + patch
-    write_version_props(new_name, new_code)
-
-    Dir.chdir(PROJECT_ROOT) do
-      sh("git add version.properties")
-      sh("git commit -m 'chore: bump patch version to #{new_name}'")
-    end
-  end
-
-  desc "Bump minor version (x.y.Z → x.(y+1).0)"
-  lane :bump_minor do
-    v = parse_version_props
-    major, minor, _ = v[:name].split(".").map(&:to_i)
+  when :minor
     minor += 1
-    new_name = [major, minor, 0].join(".")
-    new_code = major * 10_000 + minor * 100
-    write_version_props(new_name, new_code)
-
-    Dir.chdir(PROJECT_ROOT) do
-      sh("git add version.properties")
-      sh("git commit -m 'chore: bump minor version to #{new_name}'")
-    end
-  end
-
-  desc "Bump major version (x.Y.Z → (x+1).0.0)"
-  lane :bump_major do
-    v = parse_version_props
-    major, _, _ = v[:name].split(".").map(&:to_i)
+    patch = 0
+  when :major
     major += 1
-    new_name = [major, 0, 0].join(".")
-    new_code = major * 10_000
-    write_version_props(new_name, new_code)
+    minor = 0
+    patch = 0
+  end
+  new_name = [major, minor, patch].join(".")
+  new_code = major * 10000 + minor * 100 + patch
+  write_version_props(new_name, new_code)
+  run_git_commit("chore: bump #{type} version to #{new_name}")
+end
 
-    Dir.chdir(PROJECT_ROOT) do
-      sh("git add version.properties")
-      sh("git commit -m 'chore: bump major version to #{new_name}'")
-    end
+# Fastlane setup
+default_fastlane_setup
+
+platform :android do
+  desc "Bump patch version"
+  lane :bump_patch do
+    bump_version(:patch)
   end
 
-  ########################################
-  # Other lanes: test, beta, deploy
-  ########################################
+  desc "Bump minor version"
+  lane :bump_minor do
+    bump_version(:minor)
+  end
+
+  desc "Bump major version"
+  lane :bump_major do
+    bump_version(:major)
+  end
 
   desc "Runs all the tests"
   lane :test do
