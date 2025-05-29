@@ -5,7 +5,6 @@ PROJECT_ROOT = File.expand_path("..", __dir__)
 VERSION_FILE = File.join(PROJECT_ROOT, "version.properties")
 
 # Parses version.properties at project root, skipping blank/comments
-
 def parse_version_props
   props = {}
   File.read(VERSION_FILE).each_line do |line|
@@ -21,7 +20,6 @@ def parse_version_props
 end
 
 # Writes new version values to version.properties
-
 def write_version_props(new_name, new_code)
   File.open(VERSION_FILE, "w") do |f|
     f.puts("VERSION_NAME=#{new_name}")
@@ -30,17 +28,14 @@ def write_version_props(new_name, new_code)
 end
 
 # Commits version.properties using Git from project root
-
 def run_git_commit(message)
   Dir.chdir(PROJECT_ROOT) do
     sh("git add version.properties")
-    # Commit only version.properties, with message properly quoted
     sh("git commit version.properties -m \"#{message}\"")
   end
 end
 
 # Generic bump helper: :patch, :minor, :major
-
 def bump_version(type)
   version = parse_version_props
   major, minor, patch = version[:name].split('.').map(&:to_i)
@@ -67,43 +62,90 @@ platform :android do
   ########################################
   # CF (Alpha) release lane
   ########################################
-
-  desc "CF (Alpha) release: bump patch, build release APK, and upload via service account"
+  desc "CF (Alpha) release: bump patch, build release APK, and upload via Firebase CLI"
   lane :cf_release do
     bump_version(:patch)
 
-            # Manually remove build folder to avoid Windows file locks
     require 'fileutils'
     FileUtils.rm_rf(File.join(PROJECT_ROOT, 'app', 'build'))
 
-    # Assemble the Release APK without cleaning via Gradle
     gradle(
       task: "assembleRelease",
       project_dir: PROJECT_ROOT,
       flags: "--no-daemon"
     )
 
-    # Assemble the Release APK
-    gradle(
-      task: "assembleRelease",
-      project_dir: PROJECT_ROOT,
-      flags: "--no-daemon"
-    )
-
-    firebase_app_distribution(
-      app:                ENV["FIREBASE_APP_ID_CF"],
-      apk_path:           lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH],
-      firebase_cli_token: ENV["FIREBASE_TOKEN"],
-      groups:             ENV["FIREBASE_CF_GROUP"],
-      release_notes:      "Alpha CF build #{parse_version_props[:name]}"
+    apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
+    sh(
+      "firebase appdistribution:distribute \"#{apk_path}\" " \
+      "--app #{ENV['FIREBASE_APP_ID_CF']} " \
+      "--groups \"#{ENV['FIREBASE_CF_GROUP']}\" " \
+      "--token #{ENV['FIREBASE_TOKEN']}"
     )
   end
 
+  ########################################
+  # Beta release lane
+  ########################################
+  desc "Beta release: bump patch, build release APK, and distribute to beta testers"
+  lane :beta_release do
+    bump_version(:patch)
+
+    require 'fileutils'
+    FileUtils.rm_rf(File.join(PROJECT_ROOT, 'app', 'build'))
+
+    gradle(
+      task: "assembleRelease",
+      project_dir: PROJECT_ROOT,
+      flags: "--no-daemon"
+    )
+
+    apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
+    sh(
+      "firebase appdistribution:distribute \"#{apk_path}\" " \
+      "--app #{ENV['FIREBASE_APP_ID_BETA']} " \
+      "--groups \"#{ENV['FIREBASE_BETA_GROUP']}\" " \
+      "--token #{ENV['FIREBASE_TOKEN']}"
+    )
+  end
+
+  ########################################
+  # Dev build on every commit
+  ########################################
+  desc "Dev build: timestamped debug APK on each commit"
+  lane :dev_build do
+    # 1️⃣ Generate unique timestamp identifier
+    ts = Time.now.strftime("%y%m%d%H%M")
+    version_name = "dev-#{ts}"
+    version_code = ts.to_i
+
+    # 2️⃣ Write dev version to version.properties
+    write_version_props(version_name, version_code)
+
+    # 3️⃣ Purge old builds to avoid Windows file locks
+    require 'fileutils'
+    FileUtils.rm_rf(File.join(PROJECT_ROOT, 'app', 'build'))
+
+    # 4️⃣ Build the Debug APK
+    gradle(
+      task: "assembleDebug",
+      project_dir: PROJECT_ROOT,
+      flags: "--no-daemon"
+    )
+
+    # 5️⃣ (Optional) Distribute to a dev testers group:
+    # apk = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
+    # sh(
+    #   "firebase appdistribution:distribute \"#{apk}\" " \
+    #   "--app #{ENV['FIREBASE_APP_ID_CF']} " \
+    #   "--groups \"dev-testers\" " \
+    #   "--token #{ENV['FIREBASE_TOKEN']}"
+    # )
+  end
 
   ########################################
   # Semantic version bump lanes
   ########################################
-
   desc "Bump patch version (x.y.Z → x.y.Z+1)"
   lane :bump_patch do
     bump_version(:patch)
@@ -120,9 +162,8 @@ platform :android do
   end
 
   ########################################
-  # Other lanes: test, beta, deploy
+  # Other lanes: test, crashlytics beta, deploy
   ########################################
-
   desc "Runs all the tests"
   lane :test do
     gradle(task: "test")

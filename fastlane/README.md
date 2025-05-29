@@ -21,7 +21,23 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 [bundle exec] fastlane android cf_release
 ```
 
-CF (Alpha) release: bump patch, build release APK, and upload via service account
+CF (Alpha) release: bump patch, build release APK, and upload via Firebase CLI
+
+### android beta_release
+
+```sh
+[bundle exec] fastlane android beta_release
+```
+
+Beta release: bump patch, build release APK, and distribute to beta testers
+
+### android dev_build
+
+```sh
+[bundle exec] fastlane android dev_build
+```
+
+Dev build: timestamped debug APK on each commit
 
 ### android bump_patch
 
