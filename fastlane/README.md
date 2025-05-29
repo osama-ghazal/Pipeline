@@ -15,6 +15,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 ## Android
 
+### android cf_release
+
+```sh
+[bundle exec] fastlane android cf_release
+```
+
+CF (Alpha) release: bump patch, build release APK, and upload via service account
+
 ### android bump_patch
 
 ```sh
