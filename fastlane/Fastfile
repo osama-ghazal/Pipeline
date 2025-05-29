@@ -4,9 +4,7 @@ default_platform(:android)
 PROJECT_ROOT = File.expand_path("..", __dir__)
 VERSION_FILE = File.join(PROJECT_ROOT, "version.properties")
 
-# Parses version.properties at project root
-# Skips blank lines or comments
-# Returns a hash with :name and :code
+# Parses version.properties at project root, skipping blank/comments
 
 def parse_version_props
   props = {}
@@ -36,12 +34,12 @@ end
 def run_git_commit(message)
   Dir.chdir(PROJECT_ROOT) do
     sh("git add version.properties")
-    sh("git commit -m '#{message}'")
+    # Commit only version.properties, with message properly quoted
+    sh("git commit version.properties -m \"#{message}\"")
   end
 end
 
 # Generic bump helper: :patch, :minor, :major
-# Updates version.properties and commits
 
 def bump_version(type)
   version = parse_version_props
@@ -67,6 +65,28 @@ end
 
 platform :android do
   ########################################
+  # CF (Alpha) release lane
+  ########################################
+
+  desc "CF (Alpha) release: bump patch, build release APK, and upload via service account"
+  lane :cf_release do
+    bump_version(:patch)
+
+    gradle(
+      task: "clean assembleRelease",
+      project_dir: PROJECT_ROOT
+    )
+
+    firebase_app_distribution(
+      app: ENV["FIREBASE_APP_ID_CF"],
+      groups: ENV["FIREBASE_CF_GROUP"],
+      release_notes: "Alpha CF build #{parse_version_props[:name]}",
+      service_credentials_file: ENV["GOOGLE_APPLICATION_CREDENTIALS"]
+    )
+  end
+
+
+  ########################################
   # Semantic version bump lanes
   ########################################
 
@@ -86,7 +106,7 @@ platform :android do
   end
 
   ########################################
-  # Existing lanes
+  # Other lanes: test, beta, deploy
   ########################################
 
   desc "Runs all the tests"

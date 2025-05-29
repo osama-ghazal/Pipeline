@@ -21,7 +21,7 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 [bundle exec] fastlane android bump_patch
 ```
 
-Bump patch version
+Bump patch version (x.y.Z → x.y.Z+1)
 
 ### android bump_minor
 
@@ -29,7 +29,7 @@ Bump patch version
 [bundle exec] fastlane android bump_minor
 ```
 
-Bump minor version
+Bump minor version (x.y.Z → x.(y+1).0)
 
 ### android bump_major
 
@@ -37,7 +37,7 @@ Bump minor version
 [bundle exec] fastlane android bump_major
 ```
 
-Bump major version
+Bump major version (x.y.Z → (x+1).0.0)
 
 ### android test
 

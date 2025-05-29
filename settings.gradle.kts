@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "pipleline"
+rootProject.name = "pipeleline"
 include(":app")
  
