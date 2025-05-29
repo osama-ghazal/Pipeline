@@ -72,25 +72,30 @@ platform :android do
   lane :cf_release do
     bump_version(:patch)
 
-        # Clean the build directory (avoid file locks)
+            # Manually remove build folder to avoid Windows file locks
+    require 'fileutils'
+    FileUtils.rm_rf(File.join(PROJECT_ROOT, 'app', 'build'))
+
+    # Assemble the Release APK without cleaning via Gradle
     gradle(
-      task: "clean",
+      task: "assembleRelease",
       project_dir: PROJECT_ROOT,
-      flags: ["--no-daemon"]
+      flags: "--no-daemon"
     )
 
     # Assemble the Release APK
     gradle(
       task: "assembleRelease",
       project_dir: PROJECT_ROOT,
-      flags: ["--no-daemon"]
+      flags: "--no-daemon"
     )
 
     firebase_app_distribution(
-      app: ENV["FIREBASE_APP_ID_CF"],
-      groups: ENV["FIREBASE_CF_GROUP"],
-      release_notes: "Alpha CF build #{parse_version_props[:name]}",
-      service_credentials_file: ENV["GOOGLE_APPLICATION_CREDENTIALS"]
+      app:                ENV["FIREBASE_APP_ID_CF"],
+      apk_path:           lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH],
+      firebase_cli_token: ENV["FIREBASE_TOKEN"],
+      groups:             ENV["FIREBASE_CF_GROUP"],
+      release_notes:      "Alpha CF build #{parse_version_props[:name]}"
     )
   end
 
