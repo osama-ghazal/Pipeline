@@ -64,17 +64,21 @@ platform :android do
   ########################################
   desc "CF (Alpha) release: bump patch, build release APK, and upload via Firebase CLI"
   lane :cf_release do
+    # 1️⃣ Bump patch version in version.properties
     bump_version(:patch)
 
+    # 2️⃣ Remove old build folder to avoid file-lock issues
     require 'fileutils'
     FileUtils.rm_rf(File.join(PROJECT_ROOT, 'app', 'build'))
 
+    # 3️⃣ Assemble the Release APK
     gradle(
       task: "assembleRelease",
       project_dir: PROJECT_ROOT,
       flags: "--no-daemon"
     )
 
+    # 4️⃣ Distribute via Firebase CLI
     apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
     sh(
       "firebase appdistribution:distribute \"#{apk_path}\" " \
@@ -89,17 +93,21 @@ platform :android do
   ########################################
   desc "Beta release: bump patch, build release APK, and distribute to beta testers"
   lane :beta_release do
+    # 1️⃣ Bump patch version
     bump_version(:patch)
 
+    # 2️⃣ Remove old build folder
     require 'fileutils'
     FileUtils.rm_rf(File.join(PROJECT_ROOT, 'app', 'build'))
 
+    # 3️⃣ Assemble the Release APK
     gradle(
       task: "assembleRelease",
       project_dir: PROJECT_ROOT,
       flags: "--no-daemon"
     )
 
+    # 4️⃣ Distribute via Firebase CLI to Beta group
     apk_path = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
     sh(
       "firebase appdistribution:distribute \"#{apk_path}\" " \
@@ -112,28 +120,23 @@ platform :android do
   ########################################
   # Dev build on every commit
   ########################################
-  desc "Dev build: timestamped debug APK on each commit"
+  desc "Dev build: assemble a timestamped debug APK on each commit"
   lane :dev_build do
-    # 1️⃣ Generate unique timestamp identifier
-    ts = Time.now.strftime("%y%m%d%H%M")
-    version_name = "dev-#{ts}"
-    version_code = ts.to_i
+    # 1️⃣ Stop any running Gradle daemons (avoid locked files)
+    sh("gradlew --stop -p #{PROJECT_ROOT}")
 
-    # 2️⃣ Write dev version to version.properties
-    write_version_props(version_name, version_code)
+    # 2️⃣ Optionally clean project to get a fresh build (uncomment if needed)
+    # sh("gradlew -p #{PROJECT_ROOT} clean")
 
-    # 3️⃣ Purge old builds to avoid Windows file locks
-    require 'fileutils'
-    FileUtils.rm_rf(File.join(PROJECT_ROOT, 'app', 'build'))
-
-    # 4️⃣ Build the Debug APK
+    # 3️⃣ Assemble the Debug APK. Gradle’s build.gradle.kts will inject
+    #    a versionNameSuffix and computed versionCode for debug automatically.
     gradle(
       task: "assembleDebug",
       project_dir: PROJECT_ROOT,
       flags: "--no-daemon"
     )
 
-    # 5️⃣ (Optional) Distribute to a dev testers group:
+    # 4️⃣ (Optional) Distribute the debug APK via Firebase CLI to “dev-testers”
     # apk = lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH]
     # sh(
     #   "firebase appdistribution:distribute \"#{apk}\" " \

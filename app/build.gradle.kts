@@ -2,58 +2,74 @@ import java.util.Properties
 import java.io.FileInputStream
 
 plugins {
-    id("com.google.gms.google-services")
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.hilt)
-    alias(libs.plugins.kotlin.kapt)
+    id("com.android.application")
+    kotlin("android")
+    kotlin("kapt")
+    id("dagger.hilt.android.plugin")
+    // … any other plugs …
 }
 
-// Load version properties
+// 1. Load the “base” version props at configuration time
 val versionPropsFile = rootProject.file("version.properties")
 val versionProps = Properties().apply {
     load(FileInputStream(versionPropsFile))
 }
+val baseVersionName = versionProps.getProperty("VERSION_NAME")      // e.g. "1.0.29"
+val baseVersionCode = versionProps.getProperty("VERSION_CODE").toInt() // e.g. 10029
 
 android {
     compileSdk = 36
-    namespace = "com.example.pipleline"
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-
-    kotlinOptions {
-        jvmTarget = "11"
-    }
+    buildToolsVersion = "36.0.0" // latest Build Tools (example)
 
     defaultConfig {
         applicationId = "com.example.pipleline"
         minSdk = 24
         targetSdk = 36
-        versionCode = versionProps.getProperty("VERSION_CODE").toInt()
-        versionName = versionProps.getProperty("VERSION_NAME")
+
+        // 2. For “release” builds, use exactly whatever’s in version.properties
+        versionCode = baseVersionCode
+        versionName = baseVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        debug {
+            // 3. Compute a dev‐only suffix at build time. E.g. “dev‐2306020945”
+            val ts = System.currentTimeMillis() / 1000   // seconds since epoch
+            versionCode = (baseVersionCode * 10_000) + (ts % 10_000).toInt()
+            versionName = "${baseVersionName}-dev${ts}"
+
+            // If you want an applicationIdSuffix or custom signing config, you can add here:
+            // applicationIdSuffix = ".dev"
+            // signingConfig = ...
+        }
+        release {
+            isMinifyEnabled = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // signed APK config…
+        }
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-
+    kotlinOptions {
+        jvmTarget = "11"
+    }
     buildFeatures {
         compose = true
     }
-
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.0"
     }
 }
 
-// Ensure Kotlin compilation (including KAPT) uses the same JVM target
+// Ensure KAPT and Kotlin compile use the same target
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     kotlinOptions {
         jvmTarget = "11"
@@ -62,37 +78,31 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 }
 
 dependencies {
-    // Core Android
     implementation(platform("com.google.firebase:firebase-bom:33.14.0"))
     implementation("com.google.firebase:firebase-analytics")
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
-    implementation(libs.firebase.firestore.ktx)
-    debugImplementation(libs.androidx.ui.tooling)
-
-    // Activity & Lifecycle
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-
-    // Firebase
-    implementation(libs.firebase.firestore.ktx)
+    implementation("androidx.core:core-ktx:1.10.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
+    implementation("androidx.activity:activity-compose:1.7.1")
+    implementation(platform("androidx.compose:compose-bom:2024.1.0"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    implementation("com.google.firebase:firebase-firestore-ktx")
+    debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Hilt
-    implementation(libs.hilt.android)
-    kapt(libs.hilt.compiler)
+    implementation("com.google.dagger:hilt-android:2.48")
+    kapt("com.google.dagger:hilt-compiler:2.48")
 
-    // Networking
-    implementation(libs.retrofit)
-    implementation(libs.converter.gson)
-    implementation(libs.okhttp.logging.interceptor)
+    // Retrofit / Gson / Logging
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
 
-    // Coroutines & Flow
-    implementation(libs.coroutines.core)
-    implementation(libs.coroutines.android)
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // …etc…
 }
