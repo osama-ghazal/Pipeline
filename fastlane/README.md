@@ -29,7 +29,7 @@ CF (Alpha) release: bump patch, build release APK, and upload via Firebase CLI
 [bundle exec] fastlane android beta_release
 ```
 
-Beta release: bump patch, build release APK, and distribute to beta testers
+Beta release: build release APK and distribute to beta testers (no Git changes)
 
 ### android dev_build
 
